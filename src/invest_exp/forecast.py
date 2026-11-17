@@ -50,6 +50,9 @@ def garch_lower(
 ) -> pd.DataFrame:
     returns = close.pct_change() * 100
     positions = np.arange(window + 1, len(close)) if targets is None else close.index.get_indexer(targets)
+    # get_indexer 對不存在的日期回 −1，iloc[-1-window:-1] 會取到序列尾端（未來）的資料。
+    if (positions < window + 1).any():
+        raise ValueError("garch targets need a full window of past returns inside the series")
     rows, params = [], None
     for p in positions:
         sample = returns.iloc[p - window : p]

@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import platform
+import shutil
 import subprocess
 import time
 from datetime import UTC, datetime
@@ -58,14 +59,43 @@ def build_series() -> dict[str, pd.DataFrame]:
     return {"tr": tr_spliced, "price": price_df}
 
 
+SERIES_FILES = {"tr": "taiex_tr_spliced.csv", "price": "taiex_price.csv"}
+
+
+def _read_series(folder: Path) -> dict[str, pd.DataFrame]:
+    return {k: pd.read_csv(folder / f, index_col="date", parse_dates=True) for k, f in SERIES_FILES.items()}
+
+
+def load_run_series(run: Path) -> dict[str, pd.DataFrame]:
+    """run 只讀自己的快照：之後重抓資料會改寫 data/processed，舊 run 不能跟著變。"""
+    snap = run / "data"
+    if not snap.exists():
+        # 快照機制之前的 run：全域檔與 manifest 記錄的 SHA256 相符才補快照，否則中止。
+        manifest = run / "manifest.json"
+        recorded = json.loads(manifest.read_text()).get("data_files", {}) if manifest.exists() else {}
+        for f in SERIES_FILES.values():
+            src = PROCESSED / f
+            if recorded.get(str(src)) != sha256(src):
+                raise ValueError(f"{src}: sha256 does not match {manifest}; cannot reconstruct run snapshot")
+        snap.mkdir(parents=True)
+        for f in SERIES_FILES.values():
+            shutil.copy2(PROCESSED / f, snap / f)
+    return _read_series(snap)
+
+
 def price_complete(series: dict[str, pd.DataFrame]) -> bool:
     # 價格指數端點曾被證交所單獨擋住；沒抓到與報酬指數相同的最後一天，就不做不含息版本。
     return series["price"].index.max() >= series["tr"].index.max()
 
 
 def stage_forecasts(run: Path) -> None:
-    """只算還沒有的預測檔，可在同一個 run 補做。"""
-    series = build_series()
+    """只算還沒有的預測檔，可在同一個 run 補做；補做時沿用 run 的資料快照，不混進新資料。"""
+    if not (run / "data").exists():
+        build_series()
+        (run / "data").mkdir(parents=True)
+        for f in SERIES_FILES.values():
+            shutil.copy2(PROCESSED / f, run / "data" / f)
+    series = _read_series(run / "data")
     out = run / "forecasts"
     out.mkdir(parents=True, exist_ok=True)
     timing_path = out / "timing.json"
@@ -134,12 +164,11 @@ def ready_date(rule: str, lowers: dict[str, pd.Series], close: pd.Series) -> pd.
 
 
 def stage_evaluate(run: Path, n_random: int) -> None:
-    series = {
-        k: pd.read_csv(PROCESSED / f, index_col="date", parse_dates=True)
-        for k, f in (("tr", "taiex_tr_spliced.csv"), ("price", "taiex_price.csv"))
-    }
-    fdir = run / "forecasts"
     out = run / "results"
+    if out.exists() and any(out.iterdir()):
+        raise FileExistsError(f"{out} already has results; 不覆蓋舊結果，請開新的 run")
+    series = load_run_series(run)
+    fdir = run / "forecasts"
     out.mkdir(parents=True, exist_ok=True)
     tr_start = series["tr"].index[series["tr"]["is_tr"]].min()
     meta = {}
@@ -253,8 +282,9 @@ def stage_evaluate(run: Path, n_random: int) -> None:
     (out / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False))
 
 
-def write_manifest(run: Path, args: argparse.Namespace, started: str) -> None:
-    commit, dirty = git_commit()
+def write_manifest(run: Path, args: argparse.Namespace, started: str, code: tuple[str, bool] | None = None) -> None:
+    # 執行期間可能有新 commit 進來；記錄階段開始時的版本才對得上實際跑的程式碼。
+    commit, dirty = code if code is not None else git_commit()
     files = {
         str(p.relative_to(run)): sha256(p) for p in sorted(run.rglob("*")) if p.is_file() and p.name != "manifest.json"
     }
@@ -308,17 +338,14 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--n-random", type=int, default=500)
     args = ap.parse_args(argv)
     started = datetime.now(UTC).isoformat(timespec="seconds")
-    if args.run:
-        run = RUNS / args.run
-    else:
-        commit, _ = git_commit()
-        run = RUNS / f"{datetime.now(UTC):%Y%m%dT%H%M%SZ}-{commit[:7]}"
+    code = git_commit()
+    run = RUNS / (args.run or f"{datetime.now(UTC):%Y%m%dT%H%M%SZ}-{code[0][:7]}")
     run.mkdir(parents=True, exist_ok=True)
     if args.stage in ("forecasts", "all"):
         stage_forecasts(run)
     if args.stage in ("evaluate", "all"):
         stage_evaluate(run, args.n_random)
-    write_manifest(run, args, started)
+    write_manifest(run, args, started, code)
     print(f"[experiment] done: {run}", flush=True)
 
 

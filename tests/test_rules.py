@@ -49,3 +49,12 @@ def test_below_false_when_lower_missing():
     close = _close([1, 2, 3])
     lower = pd.Series([np.nan, 5, 1], index=close.index)
     assert below(close, lower).tolist() == [False, True, False]
+
+
+def test_ma_and_drawdown_ignore_future_closes():
+    rng = np.random.default_rng(3)
+    close = _close(100 * np.exp(rng.standard_normal(400).cumsum() * 0.01))
+    shocked = close.copy()
+    shocked.iloc[300:] *= np.linspace(0.5, 1.5, 100)
+    for f in (lambda c: ma_signal(c, 240), lambda c: drawdown_signal(c, 0.10)):
+        pd.testing.assert_series_equal(f(close).iloc[:300], f(shocked).iloc[:300])

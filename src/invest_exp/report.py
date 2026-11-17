@@ -8,6 +8,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from invest_exp import experiment
+
 MAIN_F = "F_C1024_q10"
 OPPONENTS = [
     ("H1", "Q_W252_q10", "滾動經驗分位數（不用模型）"),
@@ -70,7 +72,57 @@ def value_paths(trades: pd.DataFrame, level: pd.Series, amount: float, fee: floa
     return out
 
 
-def build_data(run: Path, processed: Path = Path("data/processed")) -> dict:
+def mechanism(trades: pd.DataFrame, windows: pd.DataFrame, level: pd.Series, rules: list[str]) -> list[dict]:
+    """每筆存款實際的買進價格對存入日收盤（＝定期定額的買價）；期末沒買的以窗口最後一天收盤計。
+
+    只買不賣、現金不計息時，期末資產差距完全由同一批存款的買進價格決定。只看已買的會漏掉
+    最貴的那幾筆（等到窗口結束都沒等到），成本會被低估。
+    """
+    t = trades.copy()
+    for c in ("window_start", "deposit_date", "buy_date"):
+        t[c] = pd.to_datetime(t[c])
+    w = windows.copy()
+    w["start"], w["end"] = pd.to_datetime(w["start"]), pd.to_datetime(w["end"])
+    t = t.merge(w[["rule", "start", "end"]], left_on=["rule", "window_start"], right_on=["rule", "start"])
+    t["dep_close"] = level.reindex(t["deposit_date"]).to_numpy()
+    t["unbought"] = t["buy_close"].isna()
+    t["price"] = t["buy_close"].fillna(pd.Series(level.reindex(t["end"]).to_numpy(), index=t.index))
+    t["wait"] = (t["buy_date"].fillna(t["end"]) - t["deposit_date"]).dt.days
+    per = t.groupby(["rule", "window_start"]).apply(
+        lambda g: pd.Series(
+            {
+                "cost": (1 / g["dep_close"]).sum() / (1 / g["price"]).sum() - 1,
+                "cheaper": (g["price"] < g["dep_close"]).mean(),
+                "wait": g["wait"].mean(),
+                "unbought": g["unbought"].sum(),
+            }
+        ),
+        include_groups=False,
+    )
+    fv = w.pivot(index="start", columns="rule", values="final_value")
+    out = []
+    for r in rules:
+        if r not in fv or r not in per.index.get_level_values(0):
+            continue
+        p = per.loc[r]
+        out.append(
+            {
+                "rule": r,
+                "name": rule_name(r),
+                "cost_vs_b0": _f(p["cost"].median() * 100, 2),
+                "cheaper": _f(p["cheaper"].median() * 100, 0),
+                "wait": _f(p["wait"].median(), 0),
+                "unbought": _f(p["unbought"].mean(), 1),
+                "cash": _f(w.loc[w["rule"] == r, "cash_ratio"].median() * 100, 1),
+                "excess": _f(((fv[r] / fv["B0"]) - 1).median() * 100, 2),
+                "final": _f(fv[r].median(), 0),
+                "contributed": _f(w["contributed"].median(), 0),
+            }
+        )
+    return out
+
+
+def build_data(run: Path) -> dict:
     res = run / "results"
     manifest = json.loads((run / "manifest.json").read_text())
     meta = json.loads((res / "meta.json").read_text())
@@ -80,7 +132,7 @@ def build_data(run: Path, processed: Path = Path("data/processed")) -> dict:
     rand = pd.read_csv(res / "random_control.csv", parse_dates=["start"])
     rates = pd.read_csv(res / "trigger_rates.csv", index_col=0)["trigger_rate"]
     trades = pd.read_csv(res / "trades_main.csv.gz", dtype={"years": str})
-    level = pd.read_csv(processed / "taiex_tr_spliced.csv", index_col="date", parse_dates=True)["level"]
+    level = experiment.load_run_series(run)["tr"]["level"]
     amount, fee = manifest["config"]["amount"], manifest["config"]["fee"]
 
     def row(scen, years, rule, opp):
@@ -115,29 +167,17 @@ def build_data(run: Path, processed: Path = Path("data/processed")) -> dict:
             c = row("main", y, MAIN_F, opp)
             if c:
                 c["diff_ntd"] = diff_ntd(y, MAIN_F, opp)
+                # 隔日成交下判定若翻轉，要在主表旁標出，不然 10 年的勝負會被讀成穩健的結論。
+                c["lag1"] = row("lag1", y, MAIN_F, opp)
             cells[y] = c
         hyp.append({"code": code, "opp": opp, "label": label, "cells": cells})
 
-    # 機制：買得比較便宜（平均成本），但錢等比較久（閒置）；兩者相抵才是結果。
-    mech = []
-    w10 = main_w[main_w["years"].astype(str) == "10"]
-    if not w10.empty:
-        cost = w10.pivot(index="start", columns="rule", values="avg_cost")
-        cash = w10.pivot(index="start", columns="rule", values="cash_ratio")
-        fv = w10.pivot(index="start", columns="rule", values="final_value")
-        for r in ["B0", MAIN_F, "Q_W252_q10", "G_q10", "B1_MA240", "B2_DD10"]:
-            if r in cost:
-                mech.append(
-                    {
-                        "rule": r,
-                        "name": rule_name(r),
-                        "cost_vs_b0": _f(((cost[r] / cost["B0"]) - 1).median() * 100, 2),
-                        "cash": _f(cash[r].median() * 100, 1),
-                        "excess": _f(((fv[r] / fv["B0"]) - 1).median() * 100, 2),
-                        "final": _f(fv[r].median(), 0),
-                        "contributed": _f(w10["contributed"].median(), 0),
-                    }
-                )
+    mech = mechanism(
+        trades[trades["years"] == "10"],
+        main_w[main_w["years"].astype(str) == "10"],
+        level,
+        ["B0", MAIN_F, "Q_W252_q10", "G_q10", "B1_MA240", "B2_DD10"],
+    )
     r10 = rand[(rand["rule"] == MAIN_F) & (rand["years"].astype(str) == "10")]
     rand_summary = {
         y: {
@@ -225,6 +265,7 @@ def build_data(run: Path, processed: Path = Path("data/processed")) -> dict:
 
     return {
         "run_id": manifest["run_id"],
+        "main_f": MAIN_F,
         "n_random": next(
             st["command"].get("n_random") for st in reversed(manifest["stages"]) if st["stage"] in ("evaluate", "all")
         ),

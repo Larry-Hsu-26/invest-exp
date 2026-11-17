@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 from invest_exp.forecast import context_windows, garch_lower
 
@@ -18,11 +19,21 @@ def test_garch_lower_uses_only_past():
     idx = pd.bdate_range("2020-01-01", periods=260)
     close = pd.Series(100 * np.exp(rng.standard_normal(260).cumsum() * 0.01), index=idx)
     base = garch_lower(close, qs=(0.1,), window=200, targets=idx[[220, 230, 240]])
+    # 從目標日本身開始改（非等比例），抓「用到當日報酬」這種差一天的洩漏。
     shocked = close.copy()
-    shocked.iloc[231:] *= 0.5
+    shocked.iloc[230:] *= np.linspace(0.5, 1.5, 30)
     after = garch_lower(shocked, qs=(0.1,), window=200, targets=idx[[220, 230, 240]])
     pd.testing.assert_series_equal(base["q0.1"].iloc[:2], after["q0.1"].iloc[:2])
     assert base["q0.1"].iloc[2] != after["q0.1"].iloc[2]
+
+
+def test_garch_lower_rejects_targets_without_full_window():
+    idx = pd.bdate_range("2020-01-01", periods=230)
+    close = pd.Series(np.linspace(100, 120, 230), index=idx)
+    # 不在 index 的日期（get_indexer 回 −1）與歷史不足的日期都必須拒絕，否則會取到序列尾端的未來資料。
+    for bad in (pd.DatetimeIndex(["2030-01-01"]), idx[[150]]):
+        with pytest.raises(ValueError):
+            garch_lower(close, qs=(0.1,), window=200, targets=bad)
 
 
 def test_garch_lower_below_previous_close_for_low_quantile():

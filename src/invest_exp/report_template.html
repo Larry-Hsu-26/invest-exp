@@ -77,13 +77,13 @@ a { color: var(--accent); }
     <h2 id="headline"></h2>
     <p id="headline-sub" class="muted"></p>
     <div class="panel verdict" id="verdict"></div>
-    <p class="note">判定：Timestral（C1024、q0.10）期末資產勝過對手的窗口比例 &gt; 50%，且超額報酬中位數 &gt; 0，兩者都成立才算「支持」。10 年窗口為事先登錄的主設定。差距小於 0.2%（10 年約一萬元上下）在標題視為打平。紅色代表勝過、綠色代表落後（台股慣例）。</p>
+    <p class="note">判定：Timestral（C1024、q0.10）期末資產勝過對手的窗口比例 &gt; 50%，且超額報酬中位數 &gt; 0，兩者都成立才算「支持」。10 年窗口為事先登錄的主設定。差距小於 0.2%（10 年約一萬元上下）在標題視為打平；勝率與中位數方向不一致時寫「互有勝負」。這兩條與 H5 的判定（百分位中位數 &gt; 50 且過半窗口高於隨機中位數）是呈現規則，不在事先登錄的 spec 內。紅色代表勝過、綠色代表落後（台股慣例）。</p>
   </section>
 
   <section>
     <div class="eyebrow">機制</div>
-    <h2>買得比較便宜，但錢等比較久</h2>
-    <p class="muted">10 年窗口的中位數。等跌再買的規則平均買進成本比定期定額低，但等待期間的現金沒有參與上漲；兩者相抵就是最後的差距。</p>
+    <h2 id="mech-title"></h2>
+    <p class="muted">10 年窗口的中位數。只買不賣、現金不計息時，期末資產的差距完全由同一批存款的買進價格決定：等待的代價就表現在「之後買得比較貴」。成本把到期末都沒買的存款以窗口最後一天收盤計入。</p>
     <div class="panel tablebox"><table id="mech-table"></table></div>
   </section>
 
@@ -139,7 +139,7 @@ a { color: var(--accent); }
       <li><b>預訓練洩漏無法排除。</b>Timestral-209M 在 2026-10-14 發布，預訓練資料未公開，可能包含台股指數。回測期間幾乎都在發布之前。</li>
       <li><b>窗口高度重疊。</b>每月一個起點，相鄰窗口幾乎是同一段行情；勝率是描述統計，不是獨立樣本的檢定。</li>
       <li><b>只有約 24 年資料。</b>報酬指數從 2003 年才有，所以只做 10 年、20 年與全期間，沒有 30、40 年窗口。</li>
-      <li><b>報酬指數不能直接買。</b>0050 等 ETF 有追蹤誤差與管理費；管理費對每個規則相同，不影響比較。</li>
+      <li><b>報酬指數不能直接買。</b>0050 等 ETF 有追蹤誤差與管理費；管理費依持有部位計算，閒置現金多的規則付得較少，會稍微偏袒等待型規則，不會推翻「輸給定期定額」。</li>
       <li><b>當日收盤成交是假設。</b>「隔日收盤成交」的穩健性結果見上表。</li>
     </ul>
   </section>
@@ -172,15 +172,16 @@ function renderText() {
   const randOk = r && r.median_pct > 50 && r.share_above_half > 50;
   // 差距小於 0.2%（10 年期末資產約一萬元上下）視為打平，避免把雜訊說成勝負。
   const TIE = 0.2;
-  const groups = { win: [], tie: [], lose: [] };
+  const groups = { win: [], tie: [], mixed: [], lose: [] };
   for (const h of DATA.hyp) {
     const c = h.cells["10"]; if (!c) continue;
-    const g = Math.abs(c.median) < TIE ? "tie" : supported(c) ? "win" : c.median < 0 ? "lose" : "tie";
+    const g = Math.abs(c.median) < TIE ? "tie" : supported(c) ? "win" : c.median < 0 && c.win < 50 ? "lose" : "mixed";
     groups[g].push(h.label);
   }
   const parts = [];
   if (groups.win.length) parts.push(`勝過${groups.win.join("、")}`);
   if (groups.tie.length) parts.push(`和${groups.tie.join("、")}幾乎打平`);
+  if (groups.mixed.length) parts.push(`和${groups.mixed.join("、")}互有勝負`);
   if (groups.lose.length) parts.push(`輸給${groups.lose.join("、")}`);
   document.getElementById("headline").textContent = `10 年窗口：Timestral ${parts.join("，")}`;
   document.getElementById("headline-sub").textContent =
@@ -194,10 +195,13 @@ function renderText() {
       const k = h.cells[y]; return k ? `${YLABEL[y]}：勝率 ${fmt(k.win, 0)}%、超額 ${fmt(k.median, 2, true)}%` : "";
     }).filter(Boolean).join("；");
     const ok = supported(c);
+    const lag = c && c.lag1;
+    const flip = lag && supported(lag) !== ok
+      ? `<div class="note">隔日收盤成交時翻轉為${supported(lag) ? "支持" : "不支持"}：勝率 ${fmt(lag.win, 0)}%、超額 ${fmt(lag.median, 2, true)}%</div>` : "";
     const row = el("div", { className: "vrow" },
       `<span class="code">${h.code}</span>
        <div><div>對 <b>${h.label}</b>：10 年窗口勝率 <span class="num">${fmt(c && c.win, 0)}%</span>，超額中位數 <span class="num ${cls(c && c.median)}">${fmt(c && c.median, 2, true)}%</span>（約 <span class="num ${cls(c && c.diff_ntd)}">${c && c.diff_ntd !== null ? (c.diff_ntd > 0 ? "+" : "") + c.diff_ntd.toLocaleString("zh-TW") : "—"}</span> 元；P10 ${fmt(c && c.p10, 2, true)}%、P90 ${fmt(c && c.p90, 2, true)}%，${c ? c.n : 0} 個窗口）</div>
-       <div class="note">${extra}</div></div>
+       <div class="note">${extra}</div>${flip}</div>
        <span class="chip ${c ? (ok ? "yes" : "no") : "na"}">${c ? (ok ? "支持" : "不支持") : "無資料"}</span>`);
     box.appendChild(row);
   }
@@ -292,12 +296,15 @@ function charts() {
 }
 
 function renderMech() {
+  const f = DATA.mech.find(m => m.rule === DATA.main_f);
+  document.getElementById("mech-title").textContent = !f || f.cost_vs_b0 === null ? "買進價格拆解"
+    : f.cost_vs_b0 > 0 ? "等跌再買，平均反而買得比較貴" : "等跌再買，平均買得比較便宜";
   const t = document.getElementById("mech-table");
-  t.innerHTML = `<thead><tr><th>規則</th><th>平均買進成本 vs 定期定額</th><th>平均閒置資金</th><th>期末資產中位數（元）</th><th>超額 vs 定期定額</th></tr></thead><tbody>` +
+  t.innerHTML = `<thead><tr><th>規則</th><th>有效買進成本 vs 定期定額</th><th>買得比存入日便宜的存款</th><th>平均等待（天）</th><th>期末未買（筆）</th><th>平均閒置資金</th><th>超額 vs 定期定額</th></tr></thead><tbody>` +
     DATA.mech.map(m => `<tr><td>${m.name}</td><td class="num ${cls(-m.cost_vs_b0)}">${m.rule === "B0" ? "—" : fmt(m.cost_vs_b0, 2, true) + "%"}</td>` +
-      `<td class="num">${fmt(m.cash, 1)}%</td><td class="num">${m.final !== null ? m.final.toLocaleString("zh-TW") : "—"}</td>` +
-      `<td class="num ${cls(m.excess)}">${m.rule === "B0" ? "—" : fmt(m.excess, 2, true) + "%"}</td></tr>`).join("") +
-    `</tbody>` + (DATA.mech.length ? `<caption class="note" style="caption-side:bottom;text-align:left;padding-top:8px">每個 10 年窗口共存入 ${DATA.mech[0].contributed.toLocaleString("zh-TW")} 元。成本為負代表買得比定期定額便宜（紅色）。</caption>` : "");
+      `<td class="num">${m.rule === "B0" ? "—" : fmt(m.cheaper, 0) + "%"}</td><td class="num">${fmt(m.wait, 0)}</td><td class="num">${fmt(m.unbought, 1)}</td>` +
+      `<td class="num">${fmt(m.cash, 1)}%</td><td class="num ${cls(m.excess)}">${m.rule === "B0" ? "—" : fmt(m.excess, 2, true) + "%"}</td></tr>`).join("") +
+    `</tbody>` + (DATA.mech.length ? `<caption class="note" style="caption-side:bottom;text-align:left;padding-top:8px">每個 10 年窗口共存入 ${DATA.mech[0].contributed.toLocaleString("zh-TW")} 元（${Math.round(DATA.mech[0].contributed / DATA.config.amount)} 筆）。有效成本＝同一批存款以定期定額價格能買的單位數 ÷ 實際買到的單位數 − 1；正值代表買得比定期定額貴（綠色）。等待天數為日曆天，未買的算到窗口結束。</caption>` : "");
 }
 
 function renderTables() {

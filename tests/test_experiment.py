@@ -1,8 +1,10 @@
 import json
+import shutil
 from argparse import Namespace
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from invest_exp import experiment, forecast, report
 
@@ -22,6 +24,8 @@ def _fake_inputs(tmp_path, monkeypatch):
     run = tmp_path / "runs" / "r1"
     fdir = run / "forecasts"
     fdir.mkdir(parents=True)
+    # forecasts 階段會把當時的序列快照進 run；evaluate、report 只讀這份。
+    shutil.copytree(tmp_path / "processed", run / "data")
     levels = (0.01, 0.05, 0.1, 0.5, 0.9, 0.95, 0.99)
     z = {0.01: -2.33, 0.05: -1.64, 0.1: -1.28, 0.5: 0.0, 0.9: 1.28, 0.95: 1.64, 0.99: 2.33}
     prev = level.shift(1)
@@ -69,9 +73,41 @@ def test_report_renders_from_run(tmp_path, monkeypatch):
     run = _fake_inputs(tmp_path, monkeypatch)
     experiment.stage_evaluate(run, n_random=3)
     experiment.write_manifest(run, Namespace(stage="evaluate", run="r1", n_random=3), "2026-11-17T00:00:00+00:00")
-    html = report.render(report.build_data(run, processed=tmp_path / "processed"))
+    html = report.render(report.build_data(run))
     assert "<title>台股分位數進場回測</title>" in html
     assert "__DATA__" not in html
-    data = report.build_data(run, processed=tmp_path / "processed")
+    data = report.build_data(run)
     assert [h["code"] for h in data["hyp"]] == ["H1", "H2", "H3a", "H3b", "H4"]
     assert len(data["paths"]["dates"]) == len(data["paths"]["B0"])
+
+
+def test_evaluate_reads_run_snapshot_not_global(tmp_path, monkeypatch):
+    run = _fake_inputs(tmp_path, monkeypatch)
+    # 之後重抓資料會改寫全域檔；舊 run 的評估不能跟著變。
+    shutil.rmtree(tmp_path / "processed")
+    experiment.stage_evaluate(run, n_random=2)
+    assert (run / "results" / "windows.csv").exists()
+
+
+def test_evaluate_refuses_to_overwrite_results(tmp_path, monkeypatch):
+    run = _fake_inputs(tmp_path, monkeypatch)
+    experiment.stage_evaluate(run, n_random=2)
+    before = (run / "results" / "windows.csv").read_bytes()
+    with pytest.raises(FileExistsError):
+        experiment.stage_evaluate(run, n_random=2)
+    assert (run / "results" / "windows.csv").read_bytes() == before
+
+
+def test_legacy_run_snapshot_requires_matching_manifest(tmp_path, monkeypatch):
+    run = _fake_inputs(tmp_path, monkeypatch)
+    shutil.rmtree(run / "data")
+    processed = tmp_path / "processed"
+    good = {str(p): experiment.sha256(p) for p in sorted(processed.glob("*.csv"))}
+    (run / "manifest.json").write_text(json.dumps({"data_files": {k: "0" * 64 for k in good}}))
+    with pytest.raises(ValueError, match="sha256"):
+        experiment.load_run_series(run)
+    assert not (run / "data").exists()
+    (run / "manifest.json").write_text(json.dumps({"data_files": good}))
+    series = experiment.load_run_series(run)
+    assert set(series) == {"tr", "price"}
+    assert (run / "data" / "taiex_tr_spliced.csv").exists()

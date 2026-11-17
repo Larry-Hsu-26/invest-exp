@@ -66,3 +66,13 @@ def test_splice_rejects_missing_overlap():
     tr = _series({"2003-01-02": 240.0})
     with pytest.raises(ValueError, match="overlap"):
         splice(price, tr)
+
+
+def test_load_series_rejects_non_ok_month(tmp_path):
+    # 查無資料等非 OK 回應不能當成空月份悄悄略過。
+    d = tmp_path / "MFI94U"
+    d.mkdir()
+    (d / "200301.json").write_text(json.dumps({"stat": "OK", "data": [["92/01/02", "9"]]}))
+    (d / "200302.json").write_text(json.dumps({"stat": "很抱歉，沒有符合條件的資料!"}))
+    with pytest.raises(ValueError, match="200302"):
+        load_series(tmp_path, "MFI94U")

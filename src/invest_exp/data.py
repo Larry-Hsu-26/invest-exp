@@ -21,9 +21,13 @@ def parse_twse_month(payload: dict) -> pd.DataFrame:
 
 
 def load_series(root: Path, endpoint: str) -> pd.Series:
-    parts = [
-        parse_twse_month(json.loads(p.read_text(encoding="utf-8"))) for p in sorted((root / endpoint).glob("*.json"))
-    ]
+    parts = []
+    for p in sorted((root / endpoint).glob("*.json")):
+        payload = json.loads(p.read_text(encoding="utf-8"))
+        # 非 OK（查無資料、查詢日期過早）若當成空月份，序列會悄悄少一段。
+        if payload.get("stat") != "OK":
+            raise ValueError(f"{endpoint}/{p.stem}: stat={payload.get('stat')!r}")
+        parts.append(parse_twse_month(payload))
     s = pd.concat(parts)["close"].sort_index()
     if s.index.has_duplicates:
         raise ValueError(f"{endpoint}: duplicate dates")

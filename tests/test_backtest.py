@@ -90,3 +90,10 @@ def test_xirr_monthly_deposits_zero_growth():
     flows = [(pd.Timestamp(f"2020-{m:02d}-01"), -100.0) for m in range(1, 13)]
     flows.append((pd.Timestamp("2020-12-31"), 1200.0))
     assert xirr(flows) == pytest.approx(0.0, abs=1e-9)
+
+
+def test_lag_one_previous_day_signal_buys_deposit_on_deposit_day():
+    # lag1 的語意：第 t−1 天的條件成立 → 第 t 天收盤執行；存入日 t 當天存的錢也一起買。
+    close = _close([100.0, 90.0, 95.0], start="2021-01-29")  # 1/29、2/1（存入日）、2/2
+    r = simulate(close, _signal(close, [0]), close.index[1], close.index[-1], amount=100.0, fee=0.0, lag=1)
+    assert r.trades["date"].tolist() == [pd.Timestamp("2021-02-01")]
