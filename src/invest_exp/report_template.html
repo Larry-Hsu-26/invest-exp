@@ -77,7 +77,14 @@ a { color: var(--accent); }
     <h2 id="headline"></h2>
     <p id="headline-sub" class="muted"></p>
     <div class="panel verdict" id="verdict"></div>
-    <p class="note">判定：Timestral（C1024、q0.10）期末資產勝過對手的窗口比例 &gt; 50%，且超額報酬中位數 &gt; 0，兩者都成立才算「支持」。10 年窗口為事先登錄的主設定。紅色代表勝過、綠色代表落後（台股慣例）。</p>
+    <p class="note">判定：Timestral（C1024、q0.10）期末資產勝過對手的窗口比例 &gt; 50%，且超額報酬中位數 &gt; 0，兩者都成立才算「支持」。10 年窗口為事先登錄的主設定。差距小於 0.2%（10 年約一萬元上下）在標題視為打平。紅色代表勝過、綠色代表落後（台股慣例）。</p>
+  </section>
+
+  <section>
+    <div class="eyebrow">機制</div>
+    <h2>買得比較便宜，但錢等比較久</h2>
+    <p class="muted">10 年窗口的中位數。等跌再買的規則平均買進成本比定期定額低，但等待期間的現金沒有參與上漲；兩者相抵就是最後的差距。</p>
+    <div class="panel tablebox"><table id="mech-table"></table></div>
   </section>
 
   <section>
@@ -163,13 +170,21 @@ function renderText() {
   const n = main.filter(Boolean).length;
   const r = DATA.rand["10"];
   const randOk = r && r.median_pct > 50 && r.share_above_half > 50;
-  const all = n === DATA.hyp.length && randOk;
-  document.getElementById("headline").textContent = all
-    ? "在 10 年窗口，Timestral 的分位數進場勝過所有對手"
-    : n === 0 ? "在 10 年窗口，Timestral 的分位數進場沒有勝過任何對手"
-    : `在 10 年窗口，Timestral 勝過 ${n} 個對手、落後 ${DATA.hyp.length - n} 個`;
+  // 差距小於 0.2%（10 年期末資產約一萬元上下）視為打平，避免把雜訊說成勝負。
+  const TIE = 0.2;
+  const groups = { win: [], tie: [], lose: [] };
+  for (const h of DATA.hyp) {
+    const c = h.cells["10"]; if (!c) continue;
+    const g = Math.abs(c.median) < TIE ? "tie" : supported(c) ? "win" : c.median < 0 ? "lose" : "tie";
+    groups[g].push(h.label);
+  }
+  const parts = [];
+  if (groups.win.length) parts.push(`勝過${groups.win.join("、")}`);
+  if (groups.tie.length) parts.push(`和${groups.tie.join("、")}幾乎打平`);
+  if (groups.lose.length) parts.push(`輸給${groups.lose.join("、")}`);
+  document.getElementById("headline").textContent = `10 年窗口：Timestral ${parts.join("，")}`;
   document.getElementById("headline-sub").textContent =
-    `隨機對照：Timestral 的期末資產在同觸發頻率的 500 組隨機進場中，中位數排在第 ${fmt(r && r.median_pct, 0)} 百分位` +
+    `隨機對照：Timestral 的期末資產在同觸發頻率的 ${DATA.n_random} 組隨機進場中，中位數排在第 ${fmt(r && r.median_pct, 0)} 百分位` +
     `（${fmt(r && r.share_above_half, 0)}% 的窗口高於隨機中位數）。`;
 
   const box = document.getElementById("verdict");
@@ -181,7 +196,7 @@ function renderText() {
     const ok = supported(c);
     const row = el("div", { className: "vrow" },
       `<span class="code">${h.code}</span>
-       <div><div>對 <b>${h.label}</b>：10 年窗口勝率 <span class="num">${fmt(c && c.win, 0)}%</span>，超額中位數 <span class="num ${cls(c && c.median)}">${fmt(c && c.median, 2, true)}%</span>（P10 ${fmt(c && c.p10, 2, true)}%、P90 ${fmt(c && c.p90, 2, true)}%，${c ? c.n : 0} 個窗口）</div>
+       <div><div>對 <b>${h.label}</b>：10 年窗口勝率 <span class="num">${fmt(c && c.win, 0)}%</span>，超額中位數 <span class="num ${cls(c && c.median)}">${fmt(c && c.median, 2, true)}%</span>（約 <span class="num ${cls(c && c.diff_ntd)}">${c && c.diff_ntd !== null ? (c.diff_ntd > 0 ? "+" : "") + c.diff_ntd.toLocaleString("zh-TW") : "—"}</span> 元；P10 ${fmt(c && c.p10, 2, true)}%、P90 ${fmt(c && c.p90, 2, true)}%，${c ? c.n : 0} 個窗口）</div>
        <div class="note">${extra}</div></div>
        <span class="chip ${c ? (ok ? "yes" : "no") : "na"}">${c ? (ok ? "支持" : "不支持") : "無資料"}</span>`);
     box.appendChild(row);
@@ -258,7 +273,7 @@ function charts() {
 
   const r = DATA.rand10;
   document.getElementById("rand-sub").textContent =
-    "每個 10 年窗口，Timestral 的期末資產在 500 組隨機進場（每天觸發機率與 Timestral 相同）中的百分位。50 代表跟隨機一樣。";
+    `每個 10 年窗口，Timestral 的期末資產在 ${DATA.n_random} 組隨機進場（每天觸發機率與 Timestral 相同）中的百分位。50 代表跟隨機一樣。`;
   Plotly.react("rand", [{ type: "bar", x: r.starts, y: r.pct, marker: { color: css("--accent") },
     hovertemplate: "起點 %{x}<br>第 %{y:.0f} 百分位<extra></extra>" }],
     baseLayout({ showlegend: false, bargap: 0.15, yaxis: Object.assign(baseLayout().yaxis, { range: [0, 100], title: "百分位" }),
@@ -274,6 +289,15 @@ function charts() {
   })), baseLayout({ hovermode: "x unified", yaxis: Object.assign(baseLayout().yaxis, { ticksuffix: "%", title: "跌破 q0.10 下界的比例" }),
     shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: 10, y1: 10, line: { color: css("--muted"), dash: "dash", width: 1 } }],
     title: { text: "每年的覆蓋率（理想 10%）", font: { size: 14 } } }), CFG);
+}
+
+function renderMech() {
+  const t = document.getElementById("mech-table");
+  t.innerHTML = `<thead><tr><th>規則</th><th>平均買進成本 vs 定期定額</th><th>平均閒置資金</th><th>期末資產中位數（元）</th><th>超額 vs 定期定額</th></tr></thead><tbody>` +
+    DATA.mech.map(m => `<tr><td>${m.name}</td><td class="num ${cls(-m.cost_vs_b0)}">${m.rule === "B0" ? "—" : fmt(m.cost_vs_b0, 2, true) + "%"}</td>` +
+      `<td class="num">${fmt(m.cash, 1)}%</td><td class="num">${m.final !== null ? m.final.toLocaleString("zh-TW") : "—"}</td>` +
+      `<td class="num ${cls(m.excess)}">${m.rule === "B0" ? "—" : fmt(m.excess, 2, true) + "%"}</td></tr>`).join("") +
+    `</tbody>` + (DATA.mech.length ? `<caption class="note" style="caption-side:bottom;text-align:left;padding-top:8px">每個 10 年窗口共存入 ${DATA.mech[0].contributed.toLocaleString("zh-TW")} 元。成本為負代表買得比定期定額便宜（紅色）。</caption>` : "");
 }
 
 function renderTables() {
@@ -302,7 +326,7 @@ function renderTables() {
     <details><summary>這次執行留存的檔案（${DATA.files.length} 個）</summary><ul class="mono" style="font-size:12px">${DATA.files.map(f => `<li>runs/${DATA.run_id}/${f}</li>`).join("")}</ul></details>`;
 }
 
-renderText(); renderMainTable(); renderTables();
+renderText(); renderMech(); renderMainTable(); renderTables();
 function draw() { if (window.Plotly) charts(); }
 draw();
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);

@@ -79,7 +79,7 @@ def build_data(run: Path, processed: Path = Path("data/processed")) -> dict:
     cal = pd.read_csv(res / "calibration.csv")
     rand = pd.read_csv(res / "random_control.csv", parse_dates=["start"])
     rates = pd.read_csv(res / "trigger_rates.csv", index_col=0)["trigger_rate"]
-    trades = pd.read_csv(res / "trades_main.csv.gz")
+    trades = pd.read_csv(res / "trades_main.csv.gz", dtype={"years": str})
     level = pd.read_csv(processed / "taiex_tr_spliced.csv", index_col="date", parse_dates=True)["level"]
     amount, fee = manifest["config"]["amount"], manifest["config"]["fee"]
 
@@ -102,10 +102,42 @@ def build_data(run: Path, processed: Path = Path("data/processed")) -> dict:
         }
 
     years_list = [y for y in ("10", "20", "full") if (windows["years"].astype(str) == y).any()]
+    main_w = windows[windows["scenario"] == "main"]
+
+    def diff_ntd(years, rule, opp):
+        g = main_w[main_w["years"].astype(str) == years].pivot(index="start", columns="rule", values="final_value")
+        return None if g.empty or opp not in g else _f((g[rule] - g[opp]).median(), 0)
+
     hyp = []
     for code, opp, label in OPPONENTS:
-        cells = {y: row("main", y, MAIN_F, opp) for y in years_list}
+        cells = {}
+        for y in years_list:
+            c = row("main", y, MAIN_F, opp)
+            if c:
+                c["diff_ntd"] = diff_ntd(y, MAIN_F, opp)
+            cells[y] = c
         hyp.append({"code": code, "opp": opp, "label": label, "cells": cells})
+
+    # 機制：買得比較便宜（平均成本），但錢等比較久（閒置）；兩者相抵才是結果。
+    mech = []
+    w10 = main_w[main_w["years"].astype(str) == "10"]
+    if not w10.empty:
+        cost = w10.pivot(index="start", columns="rule", values="avg_cost")
+        cash = w10.pivot(index="start", columns="rule", values="cash_ratio")
+        fv = w10.pivot(index="start", columns="rule", values="final_value")
+        for r in ["B0", MAIN_F, "Q_W252_q10", "G_q10", "B1_MA240", "B2_DD10"]:
+            if r in cost:
+                mech.append(
+                    {
+                        "rule": r,
+                        "name": rule_name(r),
+                        "cost_vs_b0": _f(((cost[r] / cost["B0"]) - 1).median() * 100, 2),
+                        "cash": _f(cash[r].median() * 100, 1),
+                        "excess": _f(((fv[r] / fv["B0"]) - 1).median() * 100, 2),
+                        "final": _f(fv[r].median(), 0),
+                        "contributed": _f(w10["contributed"].median(), 0),
+                    }
+                )
     r10 = rand[(rand["rule"] == MAIN_F) & (rand["years"].astype(str) == "10")]
     rand_summary = {
         y: {
@@ -193,6 +225,9 @@ def build_data(run: Path, processed: Path = Path("data/processed")) -> dict:
 
     return {
         "run_id": manifest["run_id"],
+        "n_random": next(
+            st["command"].get("n_random") for st in reversed(manifest["stages"]) if st["stage"] in ("evaluate", "all")
+        ),
         "git_commit": manifest["stages"][-1]["git_commit"],
         "finished": manifest["stages"][-1]["finished_utc"],
         "timestral": manifest["timestral"],
@@ -203,6 +238,7 @@ def build_data(run: Path, processed: Path = Path("data/processed")) -> dict:
         "n_windows": meta["main"]["n_windows"],
         "years": years_list,
         "hyp": hyp,
+        "mech": mech,
         "rand": rand_summary,
         "rand10": {
             "starts": [d.strftime("%Y-%m") for d in r10["start"]],
