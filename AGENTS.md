@@ -40,9 +40,21 @@
 - Timestral 從 GitHub 固定 commit 安裝，權重從 HuggingFace 固定 revision 下載。
 
 ```bash
-uv run pytest -q -W error          # 警告一律視為錯誤
+uv run pytest -q -W error                                   # 警告一律視為錯誤
 uv run ruff check . && uv run ruff format --check .
+uv run python -m invest_exp.fetch --end <YYYY-MM-DD>        # 抓證交所原始資料（可接續；過去月份不重抓）
+uv run python -m invest_exp.experiment forecasts            # 新 run：Timestral、GARCH 預測存檔（約 1 小時，CPU）
+uv run python -m invest_exp.experiment evaluate --run <id>  # 訊號、回測、彙總、校準、隨機對照
+uv run python -m invest_exp.report --run <id>               # reports/<id>.html 與內嵌 plotly 的 .standalone.html
 ```
+
+| 路徑 | 內容 |
+|---|---|
+| `src/invest_exp/` | `fetch`、`data`（解析與拼接）、`rules`、`forecast`、`backtest`、`evaluate`、`experiment`、`report` |
+| `data/raw/twse/` | 證交所原始 JSON、`fetch_log.csv`（每次請求的網址、時間、SHA256）、`fetch_run.log` |
+| `data/processed/` | 拼接後的報酬指數、價格指數 |
+| `runs/<run_id>/` | 一次執行的全部產出與 `manifest.json`（SHA256、版本、設定、各階段紀錄） |
+| `reports/` | HTML 報告；`.standalone.html` 不需網路 |
 
 ## 開發流程：Superpowers
 `.claude/skills/` vendor 了 **obra/superpowers** v6.4.1（MIT，見 `LICENSE-superpowers.txt`）。
@@ -103,7 +115,9 @@ brainstorming → writing-plans → 實作（依測試分級，核心元件走 t
 ### 證交所的歷史資料有起始日，請求太快會被擋
 - **before**：查 1995 年的加權指數回 `查詢日期小於88年1月5日`；報酬指數 2003-01 以前沒有；短時間連續請求回一頁
   「因為安全性考量，您所執行的頁面無法呈現」。
-- **after**：加權指數從 1999-01-05、報酬指數從 2003-01-02 起抓；每個請求之間至少間隔 3 秒，被擋就等待後重試。
+- **before（第二次）**：連續約 100 個請求後，價格指數端點被單獨擋（HTTP 307、內容是擋頁），之後報酬指數也被擋，整個 IP 受限。
+- **after**：加權指數從 1999-01-05、報酬指數從 2003-01-02 起抓；每個請求間隔 3.5 秒；被擋時退避 1、5、15、30 分鐘重試；
+  主資料（報酬指數）先抓。原始回應一律檢查是不是 JSON，擋頁不能當資料存。
 
 ## docs/ 索引
 
