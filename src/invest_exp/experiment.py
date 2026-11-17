@@ -75,6 +75,7 @@ def stage_forecasts(run: Path) -> None:
     if price_complete(series):
         jobs.append(("price", 1024))
         garch_jobs.append("price")
+        timing.pop("price_skipped", None)
     else:
         timing["price_skipped"] = (
             f"price index ends {series['price'].index.max().date()}, tr ends {series['tr'].index.max().date()}"
