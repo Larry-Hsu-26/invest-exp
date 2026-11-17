@@ -1,4 +1,7 @@
 {
   "price_skipped": "price index ends 2008-09-30, tr ends 2026-11-17",
-  "timestral_tr_C512": 354.1
+  "timestral_tr_C512": 354.1,
+  "timestral_tr_C1024": 654.1,
+  "timestral_tr_C2048": 1007.3,
+  "garch_tr": 116.4
 }

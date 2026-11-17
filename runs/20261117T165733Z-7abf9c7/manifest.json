@@ -1,0 +1,68 @@
+{
+  "run_id": "20261117T165733Z-7abf9c7",
+  "stages": [
+    {
+      "stage": "forecasts",
+      "started_utc": "2026-11-17T16:57:33+00:00",
+      "finished_utc": "2026-11-17T17:33:20+00:00",
+      "command": {
+        "stage": "forecasts",
+        "run": null,
+        "n_random": 500
+      },
+      "git_commit": "ea7a2f3c3103d683872654e00811c0d3ebd80eaf",
+      "src_dirty": false
+    }
+  ],
+  "python": "3.12.3",
+  "packages": {
+    "torch": "2.8.0+cpu",
+    "timestral": "1.0.0",
+    "arch": "9.0.0",
+    "pandas": "3.1.1",
+    "numpy": "2.5.5",
+    "scipy": "1.18.1"
+  },
+  "timestral": {
+    "repo": "mistralai/Timestral-209M",
+    "revision": "9874d252ab0aae16f7f7c999f98f98d6ad7d8365",
+    "code_commit": "a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff",
+    "symmetric_averaging": true
+  },
+  "torch_threads": 4,
+  "config": {
+    "amount": 20000.0,
+    "fee": 0.001425,
+    "quantiles": [
+      0.1,
+      0.05
+    ],
+    "contexts": [
+      512,
+      1024,
+      2048
+    ],
+    "garch_window": 1008,
+    "release": "2026-10-14",
+    "main": {
+      "F": "F_C1024_q10",
+      "Q": "Q_W252_q10",
+      "G": "G_q10",
+      "B1": "B1_MA240",
+      "B2": "B2_DD10",
+      "B0": "B0"
+    }
+  },
+  "raw_fetch_log_sha256": "673286b8453117bd47ffb47c9efe6a1b042a10cbad6ade1d1729f4cbbea3c391",
+  "data_files": {
+    "data/processed/taiex_price.csv": "56828db4e85f3d2ded0d5c1f37ef7981c5b17c2b34921f555b7b343ebedcb1f5",
+    "data/processed/taiex_tr_spliced.csv": "3f5222672726a422a266f6074222fec90e6607d6b6d32425b379e06233a3a6af"
+  },
+  "files": {
+    "forecasts/garch_tr.csv": "e7f580ebaf8f63c24e7ee239308731d94419b6c2bc43e2b589557eee744bdc54",
+    "forecasts/timestral_tr_C1024.csv": "c83c79e7a190dcd36696655c59cd7c77e4d7b55fab40dc1244f02209c8f6fe9e",
+    "forecasts/timestral_tr_C2048.csv": "1c9506d0ab323f59cfac8ce0fbe4b1b996afe5a7de229e4e8088a4cb7108066e",
+    "forecasts/timestral_tr_C512.csv": "c5931e625ee055188c5ed80afea7625dc0bcef09f3f6b124fb0c9da2abedd49b",
+    "forecasts/timing.json": "cb899e455d4db44c98e5656f88525e888197727785c617a9ecc6dfd13a6f0a53"
+  }
+}
