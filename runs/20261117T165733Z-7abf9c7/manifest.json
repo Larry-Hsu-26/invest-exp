@@ -12,6 +12,30 @@
       },
       "git_commit": "ea7a2f3c3103d683872654e00811c0d3ebd80eaf",
       "src_dirty": false
+    },
+    {
+      "stage": "forecasts",
+      "started_utc": "2026-11-17T17:33:45+00:00",
+      "finished_utc": "2026-11-17T17:46:10+00:00",
+      "command": {
+        "stage": "forecasts",
+        "run": "20261117T165733Z-7abf9c7",
+        "n_random": 500
+      },
+      "git_commit": "f27909e089801cf3572be48bb8395d2572cfd7a2",
+      "src_dirty": false
+    },
+    {
+      "stage": "evaluate",
+      "started_utc": "2026-11-17T17:46:18+00:00",
+      "finished_utc": "2026-11-17T17:47:09+00:00",
+      "command": {
+        "stage": "evaluate",
+        "run": "20261117T165733Z-7abf9c7",
+        "n_random": 500
+      },
+      "git_commit": "f27909e089801cf3572be48bb8395d2572cfd7a2",
+      "src_dirty": false
     }
   ],
   "python": "3.12.3",
@@ -55,14 +79,27 @@
   },
   "raw_fetch_log_sha256": "673286b8453117bd47ffb47c9efe6a1b042a10cbad6ade1d1729f4cbbea3c391",
   "data_files": {
-    "data/processed/taiex_price.csv": "56828db4e85f3d2ded0d5c1f37ef7981c5b17c2b34921f555b7b343ebedcb1f5",
+    "data/processed/taiex_price.csv": "7b4b04678b83149c2dc30f47b0cde74f14dccd895e93bde8171f3cf5e77f8534",
     "data/processed/taiex_tr_spliced.csv": "3f5222672726a422a266f6074222fec90e6607d6b6d32425b379e06233a3a6af"
   },
   "files": {
+    "forecasts/garch_price.csv": "e85d045c1f37002b6e8c79e446c1bcbcfa2d377586bd817060eabbf1390814e1",
     "forecasts/garch_tr.csv": "e7f580ebaf8f63c24e7ee239308731d94419b6c2bc43e2b589557eee744bdc54",
+    "forecasts/timestral_price_C1024.csv": "d70e973c0d7efe5d8ed2dbc59856d269530d9dd7395faab5511f3875d6e0a297",
     "forecasts/timestral_tr_C1024.csv": "c83c79e7a190dcd36696655c59cd7c77e4d7b55fab40dc1244f02209c8f6fe9e",
     "forecasts/timestral_tr_C2048.csv": "1c9506d0ab323f59cfac8ce0fbe4b1b996afe5a7de229e4e8088a4cb7108066e",
     "forecasts/timestral_tr_C512.csv": "c5931e625ee055188c5ed80afea7625dc0bcef09f3f6b124fb0c9da2abedd49b",
-    "forecasts/timing.json": "cb899e455d4db44c98e5656f88525e888197727785c617a9ecc6dfd13a6f0a53"
+    "forecasts/timing.json": "fea968f7a87508ee225823c691623b340732505c21d05746dba3dedfd7a7e713",
+    "results/calibration.csv": "1b2fc7ef63d3fb857a42af1ef29cee0ca4c999121aac5ef5f1882577fb9ab78b",
+    "results/lowers_price.csv": "c46ea15ee8d62734e9bbc1631aae7ecf6868d3153e8974f2b42c7a15d2d67b12",
+    "results/lowers_tr.csv": "28ea035929e5443f4e44182e148e3775a1a57e1fc210da446b3ce836a68ad883",
+    "results/meta.json": "030d9c58891378346e4284058501a01a678080bef4415ddfc14de8d891f10639",
+    "results/random_control.csv": "3e8f8009366ea325e6853573b7f349cf255c780b3f96354021b4fda8b731f106",
+    "results/signals_price.csv": "7257672d776d7a58db45905f60455a2f1f5e2dc61be9a70ab31d8fe73a40b475",
+    "results/signals_tr.csv": "0103c4c2de6039f004c62484e9c6273daa9a98b91dcb2387413a00a3917abc08",
+    "results/summary.csv": "32198f76e89f75cb948425b39f7317b968a0e16e88256d65eb28218a44f286e8",
+    "results/trades_main.csv.gz": "0d3c157e3f076ff1951ae5c1870d8a0c4efad57e143ce694d28d8f44e52a8b45",
+    "results/trigger_rates.csv": "c2e59ebc1f3545a110a29aa7e0ab77c7aac36f09ea418b13ce3433a56014f855",
+    "results/windows.csv": "32040cf7b11596a6437a38a56cbc47619d40ade0d36a5e9ab98a68d35ae4da6b"
   }
 }

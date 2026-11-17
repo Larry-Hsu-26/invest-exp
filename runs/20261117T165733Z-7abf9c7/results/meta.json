@@ -1,0 +1,56 @@
+{
+  "main": {
+    "series": "tr",
+    "fee": 0.001425,
+    "lag": 0,
+    "first_month": "2003-01-02",
+    "n_windows": {
+      "10": 167,
+      "20": 47,
+      "None": 1
+    }
+  },
+  "c2048": {
+    "series": "tr",
+    "fee": 0.001425,
+    "lag": 0,
+    "first_month": "2007-03-01",
+    "n_windows": {
+      "10": 117,
+      "None": 1
+    }
+  },
+  "fee0": {
+    "series": "tr",
+    "fee": 0.0,
+    "lag": 0,
+    "first_month": "2003-01-02",
+    "n_windows": {
+      "10": 167,
+      "20": 47,
+      "None": 1
+    }
+  },
+  "lag1": {
+    "series": "tr",
+    "fee": 0.001425,
+    "lag": 1,
+    "first_month": "2003-01-02",
+    "n_windows": {
+      "10": 167,
+      "20": 47,
+      "None": 1
+    }
+  },
+  "price_index": {
+    "series": "price",
+    "fee": 0.001425,
+    "lag": 0,
+    "first_month": "2003-01-02",
+    "n_windows": {
+      "10": 167,
+      "20": 47,
+      "None": 1
+    }
+  }
+}
