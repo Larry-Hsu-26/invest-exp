@@ -31,7 +31,7 @@
 |---|---|
 | 骨架（AGENTS.md、hook、skills） | ✅ 完成 |
 | 總體 spec | ✅ 已定版（使用者授權雲端代為決策） |
-| M1 回測與報告 | 實作中，plan：`docs/superpowers/plans/2026-11-17-quantile-entry.md` |
+| M1 回測與報告 | ✅ 完成：`reports/20261117T165733Z-7abf9c7.html`；紀錄見 `milestones/M1-quantile-entry.md` |
 
 每個里程碑完成後更新本表。
 
