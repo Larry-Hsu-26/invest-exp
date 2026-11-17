@@ -46,6 +46,8 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+# vendor 的 skills 不歸我們維護，格式化會改到上游內容。
+extend-exclude = [".claude"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
