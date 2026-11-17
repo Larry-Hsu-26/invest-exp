@@ -1,0 +1,17 @@
+# 祕密與內部資料一律不進版控
+.env
+/data/
+
+__pycache__/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 有前端時保留
+node_modules/
+dist/
+*.tsbuildinfo
+
+# 雲端驗證 image 用的暫存副本
+/.superpowers/

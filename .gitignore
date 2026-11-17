@@ -1,0 +1,14 @@
+# 祕密一律不進版控
+.env
+
+__pycache__/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 模型權重快取：從 HuggingFace 依固定 revision 下載，可重現，不進版控
+/.cache/
+
+# 暫存工作區（plan 的 ledger 等）
+/.superpowers/

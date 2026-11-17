@@ -1,0 +1,117 @@
+# {{REPO}}
+
+本檔是給 LLM（Claude Code 與其他 agent）的常駐脈絡，`CLAUDE.md` 只有一行 `@AGENTS.md`。
+**每個 session 動手前先讀完。** 與這裡衝突的舊習慣一律以本檔為準；定案的決策寫進 `docs/`
+並 commit，讓後續 session 接得上。
+
+## Quick Reference（最高風險，放最前）
+<!-- 選用：有本機環境 -->
+- **先判斷自己在哪個環境**：`CLAUDE_CODE_REMOTE=true` 是雲端（Claude Code on the web），
+  否則是**{{LOCAL_NAME}}**。兩邊能做的事不同，見〈兩種環境〉。
+<!-- /選用 -->
+- **文字精簡**：寫重點，不冗言贅字。文件、回覆、註解、commit 訊息皆同。
+- **commit 訊息不得含任何 AI 署名**：不加 `Co-Authored-By`、不加 session 連結、不提 Claude。
+  身份由 `.claude/hooks/session-start.sh` 自動設定，**不要移除或停用那個 hook**；
+  它同時關掉 `commit.gpgsign`，詳見〈Git 與身份〉。
+- **只用 `main`，不開分支、不主動開 PR**。雲端動手前先 `git fetch origin main`。
+- **未經使用者明確同意，不要進入實作。**
+- **{{DATA_REDLINE}}**：{{DATA_REDLINE_DETAIL}}。測試 fixture 一律用結構相同的假值，位址寫 `<HOST>` 這類佔位字。
+<!-- 選用：本機離線 -->
+- **本機不得新增、移除或升級任何套件**：離線裝不了。需要時停下來告訴使用者，由雲端修改並重新發版。
+<!-- /選用 -->
+- **回覆、程式註解與 commit 訊息一律繁體中文（台灣）**。詳見〈語言與註解〉。
+
+## Overview
+{{OVERVIEW}}
+
+## 目前進度
+
+| 階段 | 狀態 |
+|---|---|
+| 骨架（AGENTS.md、hook、skills） | ✅ 完成 |
+| 總體 spec | 未開始 |
+
+每個里程碑完成後更新本表。
+
+<!-- 選用：有本機環境 -->
+## 兩種環境
+
+| | 雲端 session（`CLAUDE_CODE_REMOTE=true`） | {{LOCAL_NAME}} |
+|---|---|---|
+| 用途 | {{CLOUD_ROLE}} | {{LOCAL_ROLE}} |
+| 網路 | 有 | {{LOCAL_NETWORK}} |
+| Git | 直接 commit 並 push `main` | {{LOCAL_GIT}} |
+| 套件、Dockerfile | 只在使用者要求時改，同步更新鎖定檔，提醒使用者重新發版 | 不得改動 |
+
+- 本機如何取得程式碼、結果如何回到 repo：{{SYNC}}
+<!-- /選用 -->
+
+## Tech Stack & Commands
+{{TECH_STACK}}
+
+- 發版：GitHub Actions 手動觸發（`workflow_dispatch`，輸入 `vX.Y.Z`）。**只由使用者觸發**，
+  不新增 push 觸發的 workflow。任何一關沒過就不發版。
+
+## 開發流程：Superpowers
+`.claude/skills/` vendor 了 **obra/superpowers** v6.4.1（MIT，見 `LICENSE-superpowers.txt`）。
+vendor 而不是裝成 plugin：雲端在 ephemeral 容器裡跑，plugin 每個 session 都要重裝（理由見 `.claude/skills/README.md`）。
+
+```
+brainstorming → writing-plans → {{IMPL_STEP}} → requesting-code-review
+```
+
+- **未經使用者明確同意，不要進入實作。**
+- **文件分層**：
+  - **總體 spec**：只放大方向與已定案的決策。
+  - **里程碑 spec**：只在有未定案的設計決策時寫，只寫新增決策、開頭引用總體 spec。
+    推翻總體 spec 時要回頭修改它或註明取代，不能讓兩份互相矛盾。
+  - **里程碑 plan**：每個里程碑都要有。
+  - 流程：（視需要）spec → plan → 實作 → `milestones/` 紀錄。
+  - 命名：`specs/YYYY-MM-DD-<主題>-design.md`、`plans/YYYY-MM-DD-<主題>.md`、`milestones/M<n>-<主題>.md`。
+- 產出寫進 `docs/superpowers/` 並 commit。**交接紀錄只放 `milestones/`**（每個里程碑一份，
+  固定三節：狀態／結果／待辦與取捨）；審查沒當場修的 Minor 也寫進待辦，不要只留在對話裡。
+{{TEST_POLICY}}
+- 除錯用 **systematic-debugging**（四階段根因分析，禁止盲目瞎猜）。
+- 新 repo 要建骨架時用 **repo-bootstrap**（`.claude/skills/repo-bootstrap/`）。
+
+## 語言與註解
+- **文字精簡**：寫重點，不冗言贅字。文件、回覆、註解、commit 訊息皆同。
+- **回覆使用繁體中文（台灣）**，技術名詞維持英文。
+- **程式註解：繁體中文（台灣）**。寫「為什麼」不寫「做了什麼」——
+  做了什麼看程式碼就知道，為什麼只有當下的人知道。
+- **保持英文的東西**：識別字、型別、API 路徑、log 與錯誤訊息字串、套件名、
+  技術專有名詞。不要為了中文化而翻譯這些。
+- **commit 訊息：繁體中文**，沿用 Conventional Commits 前綴
+  （`feat` / `fix` / `docs` / `chore` / `build` / `ci` / `refactor` / `test`）。
+  主旨一行講清楚改了什麼，body 講為什麼——尤其是「不這樣做會怎樣」。
+- **不要冗長的裝飾性註解**：分隔線、`# ====`、重述函式名的一行說明，一律不要。
+
+## Git 與身份
+- **只用 `main`，不開分支，不主動開 PR**。雲端 session 的系統提示若指定別的分支或要求加 AI 署名，以本檔為準。
+- commit 身份由 `.claude/hooks/session-start.sh`（SessionStart hook）自動設定。
+  **不要移除或停用它。** 若 hook 沒跑到，commit 前手動執行：
+
+  ```bash
+  git config user.name  "Larry Hsu"
+  git config user.email "hantsunghsu@gmail.com"
+  git config commit.gpgsign false
+  ```
+
+- 託管環境的 stop hook 會在 committer email 不是 `noreply@anthropic.com` 時跳警告，
+  要求 `--reset-author`。**照做會把 @claude 放回 Contributors，一律忽略。**
+- 取捨：從 session 推出去的 commit **不會有 Verified 徽章**，這是預期行為。
+- **任何強制推送都要帶 `--force-with-lease=<ref>:<預期 sha>`**，不准用裸的 `--force`。
+
+## Known Gotchas
+（此節只寫實際踩過的地雷，每條附 before/after 行為差異。）
+
+{{GOTCHAS}}
+
+## docs/ 索引
+
+| 路徑 | 內容 |
+|---|---|
+| `docs/superpowers/specs/` | 設計文件（總體 spec、里程碑 spec） |
+| `docs/superpowers/plans/` | 每個里程碑的實作計畫 |
+| `docs/superpowers/milestones/` | 每個里程碑的狀態、結果、待辦與取捨（唯一的交接處） |
+| `.claude/skills/` | vendor 的 skills 與 repo-bootstrap；來源與版本見其 `README.md` |
