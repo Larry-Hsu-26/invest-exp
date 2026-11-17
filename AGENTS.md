@@ -44,7 +44,7 @@ uv run pytest -q -W error                                   # 警告一律視為
 uv run ruff check . && uv run ruff format --check .
 uv run python -m invest_exp.fetch --end <YYYY-MM-DD>        # 抓證交所原始資料（可接續；過去月份不重抓）
 uv run python -m invest_exp.experiment forecasts            # 新 run：Timestral、GARCH 預測存檔（約 1 小時，CPU）
-uv run python -m invest_exp.experiment evaluate --run <id>  # 訊號、回測、彙總、校準、隨機對照
+uv run python -m invest_exp.experiment evaluate --run <id>  # 訊號、回測、彙總、校準、隨機對照；已有結果就拒絕
 uv run python -m invest_exp.report --run <id>               # reports/<id>.html 與內嵌 plotly 的 .standalone.html
 ```
 
@@ -53,7 +53,7 @@ uv run python -m invest_exp.report --run <id>               # reports/<id>.html 
 | `src/invest_exp/` | `fetch`、`data`（解析與拼接）、`rules`、`forecast`、`backtest`、`evaluate`、`experiment`、`report` |
 | `data/raw/twse/` | 證交所原始 JSON、`fetch_log.csv`（每次請求的網址、時間、SHA256）、`fetch_run.log` |
 | `data/processed/` | 拼接後的報酬指數、價格指數 |
-| `runs/<run_id>/` | 一次執行的全部產出與 `manifest.json`（SHA256、版本、設定、各階段紀錄） |
+| `runs/<run_id>/` | 一次執行的全部產出：`data/`（當時的序列快照，evaluate、report 只讀這份）、`manifest.json`（SHA256、版本、設定、各階段紀錄） |
 | `reports/` | HTML 報告；`.standalone.html` 不需網路 |
 
 ## 開發流程：Superpowers
