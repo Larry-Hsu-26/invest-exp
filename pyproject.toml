@@ -1,0 +1,51 @@
+[project]
+name = "invest-exp"
+version = "0.1.0"
+description = "時序分位數預測做為長期投資進場規則的驗證"
+requires-python = "==3.12.*"
+dependencies = [
+    "arch==9.0.0",
+    "numpy",
+    "pandas",
+    "plotly",
+    "pyarrow",
+    "requests",
+    "timestral",
+    "torch==2.8.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.2.0",
+    "ruff==0.17.3",
+]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "invest_exp"
+
+[tool.uv]
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
+
+# 雲端沒有 GPU，CPU wheel 小很多。
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+timestral = { git = "https://github.com/mistralai/timestral", rev = "a534bdbd244d64f3d9d743f46c7bf6fc330ed4ff" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]

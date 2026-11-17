@@ -30,7 +30,8 @@
 | 階段 | 狀態 |
 |---|---|
 | 骨架（AGENTS.md、hook、skills） | ✅ 完成 |
-| 總體 spec | 撰寫中 |
+| 總體 spec | ✅ 已定版（使用者授權雲端代為決策） |
+| M1 回測與報告 | 實作中，plan：`docs/superpowers/plans/2026-11-17-quantile-entry.md` |
 
 每個里程碑完成後更新本表。
 
