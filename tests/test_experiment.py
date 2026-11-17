@@ -4,7 +4,7 @@ from argparse import Namespace
 import numpy as np
 import pandas as pd
 
-from invest_exp import experiment, forecast
+from invest_exp import experiment, forecast, report
 
 
 def _fake_inputs(tmp_path, monkeypatch):
@@ -63,3 +63,15 @@ def test_evaluate_stage_end_to_end(tmp_path, monkeypatch):
     manifest = json.loads((run / "manifest.json").read_text())
     assert manifest["stages"][-1]["stage"] == "evaluate"
     assert "results/windows.csv" in manifest["files"]
+
+
+def test_report_renders_from_run(tmp_path, monkeypatch):
+    run = _fake_inputs(tmp_path, monkeypatch)
+    experiment.stage_evaluate(run, n_random=3)
+    experiment.write_manifest(run, Namespace(stage="evaluate", run="r1", n_random=3), "2026-11-17T00:00:00+00:00")
+    html = report.render(report.build_data(run, processed=tmp_path / "processed"))
+    assert "<title>台股分位數進場回測</title>" in html
+    assert "__DATA__" not in html
+    data = report.build_data(run, processed=tmp_path / "processed")
+    assert [h["code"] for h in data["hyp"]] == ["H1", "H2", "H3a", "H3b", "H4"]
+    assert len(data["paths"]["dates"]) == len(data["paths"]["B0"])

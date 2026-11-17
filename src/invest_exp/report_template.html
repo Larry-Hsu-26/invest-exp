@@ -1,0 +1,310 @@
+<title>台股分位數進場回測</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* 版面：研究備忘錄。結論在最上面，往下依序是證據、對照、穩健性、限制與稽核。 */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --fg: #141820;
+  --muted: #5b6573;
+  --line: #dde1e7;
+  --accent: #1f5fbf;
+  --up: #c8302e;      /* 台股慣例：紅＝勝過 */
+  --down: #1d8a4c;    /* 綠＝落後 */
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s0: #8a929e;
+  --font-body: "Noto Sans TC", system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Noto Sans TC", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12151a; --surface: #1a1e25; --fg: #eceff3; --muted: #a3acb8; --line: #2c323c;
+    --accent: #6ea4ef; --up: #f06b67; --down: #4cc483;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s0: #8f98a5; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12151a; --surface: #1a1e25; --fg: #eceff3; --muted: #a3acb8; --line: #2c323c;
+  --accent: #6ea4ef; --up: #f06b67; --down: #4cc483;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s0: #8f98a5; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.65; }
+.wrap { max-width: 1040px; margin: 0 auto; padding-block: 32px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 40px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.2; }
+h2 { font-size: 22px; }
+h3 { font-size: 16px; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-family: var(--font-mono); }
+section { display: grid; gap: 14px; min-width: 0; }
+.muted { color: var(--muted); }
+.mono, td.num, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; min-width: 0; }
+.verdict { display: grid; gap: 10px; }
+.vrow { display: grid; grid-template-columns: 52px 1fr auto; gap: 12px; align-items: baseline; padding: 10px 0; border-top: 1px solid var(--line); }
+.vrow:first-child { border-top: 0; }
+.code { font-family: var(--font-mono); color: var(--muted); }
+.chip { font-size: 13px; padding: 2px 10px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; font-weight: 500; }
+.chip.yes { color: var(--up); } .chip.no { color: var(--down); } .chip.na { color: var(--muted); }
+.tablebox { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
+.pos { color: var(--up); } .neg { color: var(--down); }
+.chart { width: 100%; height: 360px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.note { font-size: 13px; color: var(--muted); }
+ul { margin: 0; padding-left: 1.2em; max-width: 72ch; }
+details summary { cursor: pointer; color: var(--accent); }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+  <header style="display:grid;gap:10px">
+    <div class="eyebrow" id="meta-line"></div>
+    <h1>時序分位數預測當進場規則，能比傳統規則好嗎？</h1>
+    <p class="muted">台股報酬指數，每月存 20,000 元、只買不賣。比較 Timestral-209M 的 1 日分位數下界與傳統規則、統計模型、隨機進場，看哪一種把現金買進的時點選得比較好。</p>
+  </header>
+
+  <section>
+    <div class="eyebrow">結論</div>
+    <h2 id="headline"></h2>
+    <p id="headline-sub" class="muted"></p>
+    <div class="panel verdict" id="verdict"></div>
+    <p class="note">判定：Timestral（C1024、q0.10）期末資產勝過對手的窗口比例 &gt; 50%，且超額報酬中位數 &gt; 0，兩者都成立才算「支持」。10 年窗口為事先登錄的主設定。紅色代表勝過、綠色代表落後（台股慣例）。</p>
+  </section>
+
+  <section>
+    <div class="eyebrow">主表</div>
+    <h2>所有規則對定期定額</h2>
+    <p class="muted">每月一個起點滾動。超額是期末資產相對定期定額的差距；閒置是窗口期間平均有多少比例的資產還是現金。</p>
+    <div class="panel tablebox"><table id="main-table"></table></div>
+  </section>
+
+  <section>
+    <div class="eyebrow">分佈</div>
+    <h2>每個 10 年窗口的超額報酬</h2>
+    <p class="muted">每個點是一個起點月份；縱軸是相對定期定額的期末資產差距（%）。</p>
+    <div class="panel"><div id="box10" class="chart"></div></div>
+    <div class="panel"><div id="roll10" class="chart"></div></div>
+  </section>
+
+  <section>
+    <div class="eyebrow">全期間</div>
+    <h2>同一筆錢在三種規則下的資產</h2>
+    <p class="muted" id="path-sub"></p>
+    <div class="panel"><div id="ratio" class="chart"></div></div>
+    <div class="panel"><div id="buys" class="chart"></div></div>
+  </section>
+
+  <section>
+    <div class="eyebrow">隨機對照</div>
+    <h2>進場時點是技巧，還是只是「晚點買」？</h2>
+    <p class="muted" id="rand-sub"></p>
+    <div class="panel"><div id="rand" class="chart"></div></div>
+  </section>
+
+  <section>
+    <div class="eyebrow">預測品質與洩漏檢查</div>
+    <h2>下界準不準：每年實際跌破 q0.10 下界的比例</h2>
+    <p class="muted">理想值是 10%。高於 10% 代表下界太高（太常觸發），低於代表太低。Timestral 的預訓練資料沒有公開，發布日 2026-10-14 之前的表現可能受「看過答案」影響。</p>
+    <div class="panel"><div id="cal" class="chart"></div></div>
+    <div class="panel tablebox"><table id="cal-table"></table></div>
+  </section>
+
+  <section>
+    <div class="eyebrow">穩健性</div>
+    <h2>換個假設，結論還成立嗎？</h2>
+    <p class="muted">10 年窗口，Timestral（q0.10）對各對手的勝率與超額中位數。</p>
+    <div class="panel tablebox"><table id="robust-table"></table></div>
+  </section>
+
+  <section>
+    <div class="eyebrow">限制</div>
+    <h2>讀這份報告前要知道的事</h2>
+    <ul id="limits">
+      <li><b>預訓練洩漏無法排除。</b>Timestral-209M 在 2026-10-14 發布，預訓練資料未公開，可能包含台股指數。回測期間幾乎都在發布之前。</li>
+      <li><b>窗口高度重疊。</b>每月一個起點，相鄰窗口幾乎是同一段行情；勝率是描述統計，不是獨立樣本的檢定。</li>
+      <li><b>只有約 24 年資料。</b>報酬指數從 2003 年才有，所以只做 10 年、20 年與全期間，沒有 30、40 年窗口。</li>
+      <li><b>報酬指數不能直接買。</b>0050 等 ETF 有追蹤誤差與管理費；管理費對每個規則相同，不影響比較。</li>
+      <li><b>當日收盤成交是假設。</b>「隔日收盤成交」的穩健性結果見上表。</li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="eyebrow">稽核</div>
+    <h2>資料來源與重現</h2>
+    <div class="panel" id="audit"></div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.35.3/plotly.min.js"></script>
+<script>
+const DATA = __DATA__;
+const F = "F_C1024_q10", Q = "Q_W252_q10", G = "G_q10";
+const YLABEL = { "10": "10 年", "20": "20 年", "full": "全期間" };
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt = (v, d = 1, sign = false) => v === null || v === undefined ? "—" : (sign && v > 0 ? "+" : "") + v.toFixed(d);
+const cls = v => v === null || v === undefined ? "" : v > 0 ? "pos" : v < 0 ? "neg" : "";
+const el = (tag, attrs = {}, html = "") => Object.assign(document.createElement(tag), attrs, { innerHTML: html });
+
+function supported(c) { return c && c.win > 50 && c.median > 0; }
+
+function renderText() {
+  document.getElementById("meta-line").textContent =
+    `run ${DATA.run_id} · 資料 ${DATA.data_range[0]} – ${DATA.data_range[1]} · 第一個投資起點 ${DATA.tr_start}`;
+  const main = DATA.hyp.map(h => supported(h.cells["10"]));
+  const n = main.filter(Boolean).length;
+  const r = DATA.rand["10"];
+  const randOk = r && r.median_pct > 50 && r.share_above_half > 50;
+  const all = n === DATA.hyp.length && randOk;
+  document.getElementById("headline").textContent = all
+    ? "在 10 年窗口，Timestral 的分位數進場勝過所有對手"
+    : n === 0 ? "在 10 年窗口，Timestral 的分位數進場沒有勝過任何對手"
+    : `在 10 年窗口，Timestral 勝過 ${n} 個對手、落後 ${DATA.hyp.length - n} 個`;
+  document.getElementById("headline-sub").textContent =
+    `隨機對照：Timestral 的期末資產在同觸發頻率的 500 組隨機進場中，中位數排在第 ${fmt(r && r.median_pct, 0)} 百分位` +
+    `（${fmt(r && r.share_above_half, 0)}% 的窗口高於隨機中位數）。`;
+
+  const box = document.getElementById("verdict");
+  for (const h of DATA.hyp) {
+    const c = h.cells["10"];
+    const extra = DATA.years.filter(y => y !== "10").map(y => {
+      const k = h.cells[y]; return k ? `${YLABEL[y]}：勝率 ${fmt(k.win, 0)}%、超額 ${fmt(k.median, 2, true)}%` : "";
+    }).filter(Boolean).join("；");
+    const ok = supported(c);
+    const row = el("div", { className: "vrow" },
+      `<span class="code">${h.code}</span>
+       <div><div>對 <b>${h.label}</b>：10 年窗口勝率 <span class="num">${fmt(c && c.win, 0)}%</span>，超額中位數 <span class="num ${cls(c && c.median)}">${fmt(c && c.median, 2, true)}%</span>（P10 ${fmt(c && c.p10, 2, true)}%、P90 ${fmt(c && c.p90, 2, true)}%，${c ? c.n : 0} 個窗口）</div>
+       <div class="note">${extra}</div></div>
+       <span class="chip ${c ? (ok ? "yes" : "no") : "na"}">${c ? (ok ? "支持" : "不支持") : "無資料"}</span>`);
+    box.appendChild(row);
+  }
+  const rr = el("div", { className: "vrow" },
+    `<span class="code">H5</span>
+     <div><div>對 <b>同頻率的隨機進場</b>：中位數排在第 <span class="num">${fmt(r && r.median_pct, 0)}</span> 百分位，${fmt(r && r.share_above_half, 0)}% 的窗口高於隨機中位數</div>
+     <div class="note">隨機規則每天以相同機率觸發，排除「延後投入」本身的效果。</div></div>
+     <span class="chip ${r ? (randOk ? "yes" : "no") : "na"}">${r ? (randOk ? "支持" : "不支持") : "無資料"}</span>`);
+  box.appendChild(rr);
+}
+
+function renderMainTable() {
+  const t = document.getElementById("main-table");
+  const ys = DATA.years;
+  let head = `<tr><th>規則</th><th>每日觸發率</th>` + ys.map(y =>
+    `<th>${YLABEL[y]} 勝率</th><th>${YLABEL[y]} 超額中位數</th><th>${YLABEL[y]} XIRR</th><th>${YLABEL[y]} 閒置</th>`).join("") + `</tr>`;
+  let body = DATA.table.map(r => `<tr><td>${r.name}</td><td class="num">${fmt(r.trigger, 1)}%</td>` + ys.map(y => {
+    const c = r[y] || {}; const v = c.vsB0;
+    return `<td class="num">${v ? fmt(v.win, 0) + "%" : "—"}</td><td class="num ${cls(v && v.median)}">${v ? fmt(v.median, 2, true) + "%" : "—"}</td>` +
+           `<td class="num">${fmt(c.xirr, 2)}%</td><td class="num">${fmt(c.cash, 1)}%</td>`;
+  }).join("") + `</tr>`).join("");
+  t.innerHTML = `<thead>${head}</thead><tbody>${body}</tbody>`;
+}
+
+function baseLayout(extra = {}) {
+  const fg = css("--fg"), muted = css("--muted"), line = css("--line");
+  return Object.assign({
+    paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+    font: { family: css("--font-body"), color: fg, size: 12 },
+    margin: { l: 56, r: 16, t: 36, b: 72 },
+    xaxis: { gridcolor: line, zerolinecolor: line, linecolor: line, tickfont: { color: muted } },
+    yaxis: { gridcolor: line, zerolinecolor: muted, linecolor: line, tickfont: { color: muted } },
+    legend: { orientation: "h", y: -0.16, x: 0, yanchor: "top", font: { color: fg } },
+    hoverlabel: { bgcolor: css("--surface"), bordercolor: line, font: { color: fg } },
+  }, extra);
+}
+const CFG = { displayModeBar: false, responsive: true };
+const NAMES = { [F]: "Timestral q0.10", [Q]: "經驗分位數 252 日", [G]: "GARCH-t", "B1_MA240": "跌破年線", "B2_DD10": "回檔 10%", "B0": "定期定額" };
+
+function charts() {
+  const s = { [F]: css("--s1"), [Q]: css("--s2"), [G]: css("--s3"), B0: css("--s0") };
+  const b = DATA.box["10"];
+  if (b) {
+    const rules = [F, Q, G, "B1_MA240", "B2_DD10"].filter(r => b[r]);
+    Plotly.react("box10", rules.map(r => ({
+      type: "box", y: b[r], name: NAMES[r], boxpoints: "all", jitter: 0.5, pointpos: 0, marker: { size: 4, color: css("--accent"), opacity: .45 },
+      line: { color: css("--accent"), width: 1.5 }, fillcolor: "rgba(0,0,0,0)",
+      text: b.starts, hovertemplate: "起點 %{text}<br>超額 %{y:.2f}%<extra>" + NAMES[r] + "</extra>",
+    })), baseLayout({ showlegend: false, yaxis: Object.assign(baseLayout().yaxis, { title: "相對定期定額（%）", ticksuffix: "%" }),
+      title: { text: "10 年窗口：期末資產相對定期定額", font: { size: 14 } } }), CFG);
+    Plotly.react("roll10", [F, Q, G].filter(r => b[r]).map(r => ({
+      type: "scatter", mode: "lines", x: b.starts, y: b[r], name: NAMES[r], line: { color: s[r], width: 2 },
+      hovertemplate: "%{x}<br>%{y:.2f}%<extra>" + NAMES[r] + "</extra>",
+    })), baseLayout({ hovermode: "x unified", yaxis: Object.assign(baseLayout().yaxis, { ticksuffix: "%" }),
+      title: { text: "依起點月份：相對定期定額的超額（10 年）", font: { size: 14 } } }), CFG);
+  }
+  const p = DATA.paths;
+  document.getElementById("path-sub").textContent =
+    `從 ${p.dates[0]} 起每月存 20,000 元到 ${p.dates[p.dates.length - 1]}。上圖是各規則資產除以定期定額資產；下圖是報酬指數與 Timestral 的買進日。`;
+  Plotly.react("ratio", [F, Q, G].map(r => ({
+    type: "scatter", mode: "lines", x: p.dates, y: p[r].map((v, i) => p.B0[i] ? (v / p.B0[i] - 1) * 100 : null), name: NAMES[r],
+    line: { color: s[r], width: 2 }, hovertemplate: "%{x}<br>%{y:.2f}%<extra>" + NAMES[r] + "</extra>",
+  })), baseLayout({ hovermode: "x unified", yaxis: Object.assign(baseLayout().yaxis, { ticksuffix: "%" }),
+    title: { text: "相對定期定額的資產差距（全期間）", font: { size: 14 } } }), CFG);
+  Plotly.react("buys", [
+    { type: "scatter", mode: "lines", x: p.dates, y: p.level, name: "報酬指數", line: { color: s.B0, width: 1.5 },
+      hovertemplate: "%{x}<br>%{y:,.0f}<extra>報酬指數</extra>" },
+    { type: "scatter", mode: "markers", x: p.f_buys.dates, y: p.f_buys.level, name: "Timestral 買進日",
+      marker: { color: s[F], size: 8, line: { color: css("--surface"), width: 2 } },
+      hovertemplate: "%{x}<br>買進 %{y:,.0f}<extra>Timestral</extra>" },
+  ], baseLayout({ yaxis: Object.assign(baseLayout().yaxis, { type: "log", title: "報酬指數（對數）" }),
+    title: { text: "Timestral（q0.10）的買進日", font: { size: 14 } } }), CFG);
+
+  const r = DATA.rand10;
+  document.getElementById("rand-sub").textContent =
+    "每個 10 年窗口，Timestral 的期末資產在 500 組隨機進場（每天觸發機率與 Timestral 相同）中的百分位。50 代表跟隨機一樣。";
+  Plotly.react("rand", [{ type: "bar", x: r.starts, y: r.pct, marker: { color: css("--accent") },
+    hovertemplate: "起點 %{x}<br>第 %{y:.0f} 百分位<extra></extra>" }],
+    baseLayout({ showlegend: false, bargap: 0.15, yaxis: Object.assign(baseLayout().yaxis, { range: [0, 100], title: "百分位" }),
+      shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: 50, y1: 50, line: { color: css("--muted"), dash: "dash", width: 1 } }],
+      title: { text: "Timestral 在隨機進場中的百分位（10 年窗口）", font: { size: 14 } } }), CFG);
+
+  const c = DATA.cal.q10;
+  const cn = { "F_C1024_q10": "Timestral", "Q_W252_q10": "經驗分位數 252 日", "G_q10": "GARCH-t" };
+  Plotly.react("cal", Object.entries(c.series).map(([m, ys]) => ({
+    type: "scatter", mode: "lines+markers", x: c.years, y: ys, name: cn[m],
+    line: { color: m.startsWith("F") ? s[F] : m.startsWith("Q") ? s[Q] : s[G], width: 2 }, marker: { size: 8 },
+    hovertemplate: "%{x}<br>%{y:.1f}%<extra>" + cn[m] + "</extra>",
+  })), baseLayout({ hovermode: "x unified", yaxis: Object.assign(baseLayout().yaxis, { ticksuffix: "%", title: "跌破 q0.10 下界的比例" }),
+    shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: 10, y1: 10, line: { color: css("--muted"), dash: "dash", width: 1 } }],
+    title: { text: "每年的覆蓋率（理想 10%）", font: { size: 14 } } }), CFG);
+}
+
+function renderTables() {
+  const ct = document.getElementById("cal-table");
+  const rows = [];
+  for (const tag of ["q10", "q05"]) for (const m of DATA.cal[tag].summary) {
+    const cell = k => m[k] ? `<td class="num">${fmt(m[k].hit, 2)}%</td><td class="num">${fmt(m[k].pinball, 3)}</td><td class="num">${m[k].n}</td>` : "<td>—</td><td>—</td><td>—</td>";
+    rows.push(`<tr><td>${m.name}</td>${cell("all")}${cell("pre-release")}${cell("post-release")}</tr>`);
+  }
+  ct.innerHTML = `<thead><tr><th>模型</th><th>全期 覆蓋</th><th>pinball ×10⁴</th><th>天數</th><th>發布前 覆蓋</th><th>pinball</th><th>天數</th><th>發布後 覆蓋</th><th>pinball</th><th>天數</th></tr></thead><tbody>${rows.join("")}</tbody>`;
+
+  const rt = document.getElementById("robust-table");
+  const opps = DATA.hyp.map(h => h.opp);
+  const head = `<tr><th>情境</th><th>第一個起點</th>` + DATA.hyp.map(h => `<th>對 ${h.label}</th>`).join("") + `</tr>`;
+  const body = DATA.robust.map(r => r.skipped !== undefined
+    ? `<tr><td>${r.name}</td><td colspan="${opps.length + 1}" class="muted" style="text-align:left">未執行：${r.skipped}</td></tr>`
+    : `<tr><td>${r.name}</td><td class="num">${r.first}</td>` + opps.map(o => {
+        const c = r.cells[o]; return c ? `<td class="num ${cls(c.median)}">${fmt(c.win, 0)}% / ${fmt(c.median, 2, true)}%</td>` : "<td>—</td>";
+      }).join("") + `</tr>`).join("");
+  rt.innerHTML = `<thead>${head}</thead><tbody>${body}</tbody>`;
+
+  const a = document.getElementById("audit");
+  a.innerHTML = `<p>資料：證交所「發行量加權股價報酬指數」（2003-01-02 起），2003 年以前以「發行量加權股價指數」依 2003-01-02 的比值接上，只當模型與滾動統計的暖機。原始回應與每次請求紀錄存在 <span class="mono">data/raw/twse/</span>。</p>
+    <p>模型：<span class="mono">${DATA.timestral.repo}</span> revision <span class="mono">${DATA.timestral.revision.slice(0, 7)}</span>，程式 commit <span class="mono">${DATA.timestral.code_commit.slice(0, 7)}</span>。套件：${Object.entries(DATA.packages).map(([k, v]) => `${k} ${v}`).join("、")}。</p>
+    <p>程式 commit <span class="mono">${DATA.git_commit.slice(0, 7)}</span>；完成時間 ${DATA.finished}。每個檔案的 SHA256 在 <span class="mono">runs/${DATA.run_id}/manifest.json</span>。</p>
+    <details><summary>這次執行留存的檔案（${DATA.files.length} 個）</summary><ul class="mono" style="font-size:12px">${DATA.files.map(f => `<li>runs/${DATA.run_id}/${f}</li>`).join("")}</ul></details>`;
+}
+
+renderText(); renderMainTable(); renderTables();
+function draw() { if (window.Plotly) charts(); }
+draw();
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+</script>

@@ -12,9 +12,11 @@ import requests
 
 BASE = "https://www.twse.com.tw/rwd/zh/TAIEX"
 # 加權指數（價格指數）與報酬指數；證交所網站的起始日見 AGENTS.md〈Known Gotchas〉。
+# 報酬指數是主資料，先抓；價格指數 2003 以後只用於「不含息」穩健性檢查。
+# 證交所會單獨擋某個端點（回 307），兩者分開抓、分開退避。
 ENDPOINTS = {
-    "MI_5MINS_HIST": date(1999, 1, 1),
     "MFI94U": date(2003, 1, 1),
+    "MI_5MINS_HIST": date(1999, 1, 1),
 }
 LOG_FIELDS = ["endpoint", "month", "url", "fetched_at_utc", "http_status", "sha256", "rows", "stat"]
 DELAY_S = 3.5
@@ -31,7 +33,7 @@ def months(start: date, end: date) -> list[str]:
 def fetch_month(session: requests.Session, endpoint: str, month: str) -> tuple[str, int, str]:
     url = f"{BASE}/{endpoint}?date={month}01&response=json"
     # 證交所擋太密的請求時回 HTML 而不是 JSON；退避重試，不要把擋頁當成資料。
-    for wait in (0, 30, 60, 120, 300):
+    for wait in (0, 60, 300, 900, 1800):
         time.sleep(wait)
         r = session.get(url, timeout=60)
         text = r.text
@@ -43,7 +45,7 @@ def fetch_month(session: requests.Session, endpoint: str, month: str) -> tuple[s
     raise RuntimeError(f"{endpoint} {month}: blocked after retries")
 
 
-def run(root: Path, end: date) -> None:
+def run(root: Path, end: date, endpoints: list[str]) -> None:
     log_path = root / "fetch_log.csv"
     new_log = not log_path.exists()
     session = requests.Session()
@@ -52,7 +54,8 @@ def run(root: Path, end: date) -> None:
         writer = csv.DictWriter(fh, fieldnames=LOG_FIELDS)
         if new_log:
             writer.writeheader()
-        for endpoint, start in ENDPOINTS.items():
+        for endpoint in endpoints:
+            start = ENDPOINTS[endpoint]
             out_dir = root / endpoint
             out_dir.mkdir(parents=True, exist_ok=True)
             for month in months(start, end):
@@ -84,8 +87,9 @@ def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description="抓證交所指數歷史資料（原始 JSON 存檔）")
     ap.add_argument("--root", type=Path, default=Path("data/raw/twse"))
     ap.add_argument("--end", type=date.fromisoformat, default=date.today())
+    ap.add_argument("--endpoints", nargs="+", default=list(ENDPOINTS), choices=list(ENDPOINTS))
     args = ap.parse_args(argv)
-    run(args.root, args.end)
+    run(args.root, args.end, args.endpoints)
 
 
 if __name__ == "__main__":

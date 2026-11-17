@@ -58,25 +58,48 @@ def build_series() -> dict[str, pd.DataFrame]:
     return {"tr": tr_spliced, "price": price_df}
 
 
+def price_complete(series: dict[str, pd.DataFrame]) -> bool:
+    # 價格指數端點曾被證交所單獨擋住；沒抓到與報酬指數相同的最後一天，就不做不含息版本。
+    return series["price"].index.max() >= series["tr"].index.max()
+
+
 def stage_forecasts(run: Path) -> None:
+    """只算還沒有的預測檔，可在同一個 run 補做。"""
     series = build_series()
     out = run / "forecasts"
     out.mkdir(parents=True, exist_ok=True)
-    torch.manual_seed(0)
-    model = forecast.load_timestral()
-    timing = {}
-    jobs = [("tr", c) for c in CONTEXTS] + [("price", 1024)]
+    timing_path = out / "timing.json"
+    timing = json.loads(timing_path.read_text()) if timing_path.exists() else {}
+    jobs = [("tr", c) for c in CONTEXTS]
+    garch_jobs = ["tr"]
+    if price_complete(series):
+        jobs.append(("price", 1024))
+        garch_jobs.append("price")
+    else:
+        timing["price_skipped"] = (
+            f"price index ends {series['price'].index.max().date()}, tr ends {series['tr'].index.max().date()}"
+        )
+    model = None
     for name, c in jobs:
+        path = out / f"timestral_{name}_C{c}.csv"
+        if path.exists():
+            continue
+        if model is None:
+            torch.manual_seed(0)
+            model = forecast.load_timestral()
         t = time.time()
-        df = forecast.timestral_forecasts(series[name]["level"], context=c, model=model)
-        df.to_csv(out / f"timestral_{name}_C{c}.csv")
+        forecast.timestral_forecasts(series[name]["level"], context=c, model=model).to_csv(path)
         timing[f"timestral_{name}_C{c}"] = round(time.time() - t, 1)
-    for name in ("tr", "price"):
+        timing_path.write_text(json.dumps(timing, indent=2))
+    for name in garch_jobs:
+        path = out / f"garch_{name}.csv"
+        if path.exists():
+            continue
         t = time.time()
-        df = forecast.garch_lower(series[name]["level"], qs=QS, window=GARCH_WINDOW)
-        df.to_csv(out / f"garch_{name}.csv")
+        forecast.garch_lower(series[name]["level"], qs=QS, window=GARCH_WINDOW).to_csv(path)
         timing[f"garch_{name}"] = round(time.time() - t, 1)
-    (out / "timing.json").write_text(json.dumps(timing, indent=2))
+        timing_path.write_text(json.dumps(timing, indent=2))
+    timing_path.write_text(json.dumps(timing, indent=2))
 
 
 def build_signals(close: pd.Series, fdir: Path, name: str) -> tuple[pd.DataFrame, dict[str, pd.Series]]:
@@ -125,6 +148,9 @@ def stage_evaluate(run: Path, n_random: int) -> None:
         "lag1": ("tr", FEE, 1),
         "price_index": ("price", FEE, 0),
     }
+    if not (fdir / "timestral_price_C1024.csv").exists():
+        del scenarios["price_index"]
+        meta["price_index"] = "skipped: no price-index forecasts (price data incomplete)"
     all_results, signals_saved = [], set()
     for scen, (name, fee, lag) in scenarios.items():
         close = series[name]["level"]
