@@ -47,8 +47,12 @@ def main() -> None:
     line = " ".join(f"{a:.1f},{b:.1f}" for a, b in zip(x, y, strict=True))
     area = f"M{X0},{Y1} L" + line.replace(" ", " L") + f" L{X1},{Y1} Z"
     ticks = "".join(f'<line x1="{a:.1f}" x2="{a:.1f}" y1="582" y2="596"/>' for a in x[sig.to_numpy()])
+
+    def xpos(day: pd.Timestamp) -> float:
+        return X0 + (X1 - X0) * (day - level.index[0]).days / t[-1]
+
     years = "".join(
-        f'<text x="{X0 + (X1 - X0) * (pd.Timestamp(f"{yr}-01-01") - level.index[0]).days / t[-1]:.1f}" y="620">{yr}</text>'
+        f'<text x="{xpos(pd.Timestamp(f"{yr}-01-01")):.1f}" y="620">{yr}</text>'
         for yr in (2005, 2010, 2015, 2020, 2025)
     )
     first, last = level.index[0].date(), level.index[-1].date()
