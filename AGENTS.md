@@ -55,6 +55,7 @@ uv run python -m invest_exp.report --run <id>               # reports/<id>.html 
 | `data/processed/` | 拼接後的報酬指數、價格指數 |
 | `runs/<run_id>/` | 一次執行的全部產出：`data/`（當時的序列快照，evaluate、report 只讀這份）、`manifest.json`（SHA256、版本、設定、各階段紀錄） |
 | `reports/` | HTML 報告；`.standalone.html` 不需網路 |
+| `scripts/cover.py`、`docs/assets/` | README 封面：由正式 run 產生 HTML，瀏覽器截圖成 PNG |
 
 ## 開發流程：Superpowers
 `.claude/skills/` vendor 了 **obra/superpowers** v6.4.1（MIT，見 `LICENSE-superpowers.txt`）。
