@@ -75,6 +75,8 @@ def test_report_renders_from_run(tmp_path, monkeypatch):
     experiment.write_manifest(run, Namespace(stage="evaluate", run="r1", n_random=3), "2026-11-17T00:00:00+00:00")
     html = report.render(report.build_data(run))
     assert "<title>台股分位數進場回測</title>" in html
+    # 網頁版會補完整的 head；本機直接開時靠這行才不會被猜錯編碼。
+    assert html.startswith('<meta charset="utf-8">')
     assert "__DATA__" not in html
     data = report.build_data(run)
     assert [h["code"] for h in data["hyp"]] == ["H1", "H2", "H3a", "H3b", "H4"]

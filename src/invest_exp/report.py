@@ -297,23 +297,35 @@ def build_data(run: Path) -> dict:
 def render(data: dict) -> str:
     template = (Path(__file__).parent / "report_template.html").read_text(encoding="utf-8")
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-    return template.replace("__DATA__", payload.replace("</", "<\\/"))
+    page = template.replace("__DATA__", payload.replace("</", "<\\/"))
+    # 網頁版（Artifact）會自己包 head；本機直接開時沒有這行，Chrome 會把中文猜成 Big5。
+    return '<meta charset="utf-8">\n' + page
 
 
 PLOTLY_URL = "https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.35.3/plotly.min.js"
 
 
-def standalone(html: str) -> tuple[str, str]:
-    """把 plotly 內嵌進頁面：不連網也能開，供稽核留存。回傳 (html, plotly 的 SHA256)。"""
+def standalone(html: str, js: str | None = None) -> tuple[str, str]:
+    """把 plotly 內嵌進頁面、包成完整的 HTML 文件：不連網、本機直接開都正常，供稽核留存。
+
+    回傳 (html, plotly 的 SHA256)。
+    """
     import hashlib
 
-    import requests
+    if js is None:
+        import requests
 
-    js = requests.get(PLOTLY_URL, timeout=120).text
+        js = requests.get(PLOTLY_URL, timeout=120).text
     digest = hashlib.sha256(js.encode("utf-8")).hexdigest()
     tag = f'<script src="{PLOTLY_URL}"></script>'
     assert html.count(tag) == 1
-    return html.replace(tag, f"<script>/* {PLOTLY_URL} sha256 {digest} */\n{js}</script>"), digest
+    body = html.replace(tag, f"<script>/* {PLOTLY_URL} sha256 {digest} */\n{js}</script>")
+    body = body.removeprefix('<meta charset="utf-8">\n')
+    head = (
+        '<!doctype html>\n<html lang="zh-Hant">\n<meta charset="utf-8">\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
+    )
+    return head + body, digest
 
 
 def main(argv: list[str] | None = None) -> None:

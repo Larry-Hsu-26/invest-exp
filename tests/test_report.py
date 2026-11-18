@@ -40,3 +40,15 @@ def test_mechanism_counts_unbought_deposits_at_window_end_close():
     assert m["X"]["unbought"] == pytest.approx(1.0)
     assert m["X"]["wait"] == pytest.approx(((pd.Timestamp("2021-02-10") - d1).days + (end - d2).days) / 2)
     assert m["B0"]["cost_vs_b0"] == pytest.approx(0.0)
+
+
+def test_standalone_is_full_utf8_document():
+    # 本機用 Chrome 開時沒有編碼宣告會被猜成 Big5，中文變亂碼。
+    html = '<meta charset="utf-8">\n<title>t</title>\n<script src="' + report.PLOTLY_URL + '"></script>\n<p>中文</p>'
+    full, digest = report.standalone(html, js="var Plotly={};")
+    head = full[:300].lower()
+    assert head.startswith("<!doctype html>")
+    assert '<meta charset="utf-8">' in head
+    assert 'name="viewport"' in head
+    assert full.count('<meta charset="utf-8">') == 1
+    assert "var Plotly={};" in full and len(digest) == 64
